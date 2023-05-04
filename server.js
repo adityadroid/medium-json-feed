@@ -1,12 +1,12 @@
 const http = require('http');
-const zlib = require('zlib'); // Require the zlib module
+const zlib = require('zlib');
 const mediumJSONFeed = require('./index.js');
 
 const port = process.env.PORT || 3000;
 const headers = {
   'Content-Type': 'application/json',
   'Access-Control-Allow-Origin': '*',
-  'Content-Encoding': 'gzip' // Add the Content-Encoding header to indicate gzip compression
+  'Content-Encoding': 'gzip'
 };
 
 http.createServer((req, res) => {
@@ -19,8 +19,10 @@ http.createServer((req, res) => {
 
   mediumJSONFeed(req.url, data => {
     res.writeHead(data.status || 500, headers);
-    const gzip = zlib.createGzip(); // Create a gzip transform stream
-    data.pipe(gzip).pipe(res); // Use the gzip stream to compress the response data
+    const gzip = zlib.createGzip();
+    const json = JSON.stringify(data);
+    gzip.end(json); // Compress the JSON string and send it to the client
+    gzip.pipe(res);
   });
 
 }).listen(port);
