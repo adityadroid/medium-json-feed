@@ -4,7 +4,7 @@ const mediumJSONFeed = require('./index.js');
 const port = process.env.PORT || 3000;
 const headers = {
   'Content-Type': 'application/json',
-  'Access-Control-Allow-Origin': process.env.ORIGIN || '*'
+  'Access-Control-Allow-Origin': '*'
 };
 
 http.createServer((req, res) => {
