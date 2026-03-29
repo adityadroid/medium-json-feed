@@ -14,11 +14,21 @@ const parseRSS = (xml) => {
     content = content.replace(/<!\[CDATA\[|\]\]>/g, '');
     return content.trim();
   };
+
+  const extractSubtitle = (str, tag) => {
+    const content = extractTag(str, tag);
+    if (!content) return '';
+    const pMatch = content.match(/<p>([^<]+)<\/p>/);
+    if (pMatch) return pMatch[1].replace(/<[^>]+>/g, '');
+    const plainText = content.replace(/<[^>]+>/g, '');
+    return plainText.substring(0, 200);
+  };
   
   while ((match = itemRegex.exec(xml)) !== null) {
     const itemXml = match[1];
     items.push({
       title: extractTag(itemXml, 'title'),
+      subtitle: extractSubtitle(itemXml, 'content:encoded'),
       link: extractTag(itemXml, 'link'),
       description: extractTag(itemXml, 'description'),
       pubDate: extractTag(itemXml, 'pubDate'),
