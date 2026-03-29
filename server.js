@@ -18,11 +18,17 @@ http.createServer((req, res) => {
   console.log(`> GET: '${req.url}' --- ${new Date()}`);
 
   mediumJSONFeed(req.url, data => {
+    if (res.headersSent) return;
     res.writeHead(data.status || 500, headers);
     const gzip = zlib.createGzip();
     const json = JSON.stringify(data);
-    gzip.end(json); // Compress the JSON string and send it to the client
+    gzip.end(json);
     gzip.pipe(res);
+  }).catch(err => {
+    console.error('Error:', err);
+    if (res.headersSent) return;
+    res.writeHead(500, headers);
+    res.end(JSON.stringify({ error: err.message || err.error }));
   });
 
 }).listen(port);
