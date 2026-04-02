@@ -1,13 +1,53 @@
 const https = require("https");
+const http = require("http");
 
 /**
- * Fetches a Medium article's full content from the RSS feed.
- * The <content:encoded> tag in the RSS feed contains the complete HTML.
+ * Follow HTTP redirects to resolve the final URL.
+ * Medium media URLs like https://medium.com/media/HASH/href redirect
+ * to the actual embedded content (gists, codepens, etc.)
  */
+function resolveRedirect(url, maxRedirects = 5) {
+  return new Promise((resolve, reject) => {
+    if (maxRedirects <= 0) return resolve(url);
+
+    const client = url.startsWith("https") ? https : http;
+    const req = client.get(
+      url,
+      {
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        },
+      },
+      (res) => {
+        if (
+          [301, 302, 303, 307, 308].includes(res.statusCode) &&
+          res.headers.location
+        ) {
+          // Handle relative redirects
+          const nextUrl = res.headers.location.startsWith("http")
+            ? res.headers.location
+            : new URL(res.headers.location, url).href;
+          res.resume();
+          resolve(resolveRedirect(nextUrl, maxRedirects - 1));
+        } else {
+          // Final destination — return the URL we ended up at
+          res.resume();
+          resolve(url);
+        }
+      }
+    );
+    req.on("error", () => resolve(url));
+    req.setTimeout(5000, () => {
+      req.destroy();
+      resolve(url);
+    });
+  });
+}
+
 /**
- * Resolve Medium media redirect URLs to their actual destinations
- * Medium embeds use URLs like https://medium.com/media/HASH/href that redirect
- * to the actual content (gists, codepens, etc.)
+ * Resolve Medium media redirect URLs to their actual destinations.
+ * Replaces medium.com/media/HASH/href links with the resolved URLs.
  */
 async function resolveMediaRedirects(html) {
   // Find all Medium media URLs in the HTML
@@ -84,9 +124,9 @@ const fetchArticle = (slug, callback) => {
 
           let data = "";
           res.on("data", (chunk) => (data += chunk));
-          res.on("end", () => {
+          res.on("end", async () => {
             try {
-              const article = extractArticle(data, slug);
+              const article = await extractArticle(data, slug);
 
               if (!article) {
                 const result = {
@@ -117,9 +157,10 @@ const fetchArticle = (slug, callback) => {
 };
 
 /**
- * Extract a specific article from the RSS XML by matching its slug
+ * Extract a specific article from the RSS XML by matching its slug.
+ * Resolves Medium media redirect URLs server-side before returning.
  */
-function extractArticle(xml, slug) {
+async function extractArticle(xml, slug) {
   const itemRegex = /<item>([\s\S]*?)<\/item>/g;
   let match;
 
@@ -142,7 +183,10 @@ function extractArticle(xml, slug) {
       const coverImage = extractCoverImage(contentEncoded);
 
       // Clean the HTML: remove Medium-specific tracking, normalize
-      const html = cleanHtml(contentEncoded);
+      let html = cleanHtml(contentEncoded);
+
+      // Resolve Medium media redirect URLs to actual destinations (gists, etc.)
+      html = await resolveMediaRedirects(html);
 
       return {
         title,
