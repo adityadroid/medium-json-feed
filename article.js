@@ -140,43 +140,90 @@ function extractCoverImage(html) {
 /**
  * Clean Medium HTML for rendering on own site
  * - Removes tracking pixels
+ * - Extracts gist/media URLs from empty iframes
+ * - Preserves whitespace in code blocks
  * - Preserves semantic HTML (p, h3, h4, img, a, figure, iframe, pre, code, ul, ol, li, blockquote)
  */
 function cleanHtml(html) {
   if (!html) return "";
 
-  return (
-    html
-      // Remove Medium tracking pixels (1x1 images)
-      .replace(
-        /<img[^>]*(?:height="1"[^>]*width="1"|width="1"[^>]*height="1")[^>]*>/g,
-        ""
-      )
-      // Remove Medium stat tracking images
-      .replace(/<img[^>]*medium\.com\/_\/stat[^>]*>/g, "")
-      // Remove any script tags
-      .replace(/<script[^>]*>[\s\S]*?<\/script>/g, "")
-      // Remove noscript tags
-      .replace(/<noscript[^>]*>[\s\S]*?<\/noscript>/g, "")
-      // Fix Twitter links where Medium's noscript text leaked as link text
-      .replace(
-        /<a href="([^"]*twitter\.com\/[^"]*)">JavaScript is not available\.<\/a>/g,
-        (match, url) => {
-          const handle =
-            url.match(/twitter\.com\/([^\/?#]+)/)?.[1] || "Twitter";
-          return `<a href="${url}">@${handle}</a>`;
+  let cleaned = html
+    // Remove Medium tracking pixels (1x1 images)
+    .replace(
+      /<img[^>]*(?:height="1"[^>]*width="1"|width="1"[^>]*height="1")[^>]*>/g,
+      ""
+    )
+    // Remove Medium stat tracking images
+    .replace(/<img[^>]*medium\.com\/_\/stat[^>]*>/g, "")
+    // Remove any script tags
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/g, "")
+    // Remove noscript tags
+    .replace(/<noscript[^>]*>[\s\S]*?<\/noscript>/g, "")
+    // Fix Twitter links where Medium's noscript text leaked as link text
+    .replace(
+      /<a href="([^"]*twitter\.com\/[^"]*)">JavaScript is not available\.<\/a>/g,
+      (match, url) => {
+        const handle = url.match(/twitter\.com\/([^\/?#]+)/)?.[1] || "Twitter";
+        return `<a href="${url}">@${handle}</a>`;
+      }
+    )
+    // Remove empty paragraphs Medium sometimes adds
+    .replace(/<p>\s*<\/p>/g, "")
+    // Remove Medium's image wrapper divs but keep the img
+    .replace(/<div class="aspect-ratio[^"]*"[^>]*>/g, "")
+    .replace(/<\/div>\s*(?=<\/figure>)/g, "");
+
+  // Extract URLs from empty iframes (Medium RSS strips iframe src for gists/embeds)
+  // These iframes have src="" but contain <a> tags with the real URL
+  cleaned = cleaned.replace(
+    /<iframe[^>]*src=""[^>]*>[\s\S]*?<\/iframe>/g,
+    (iframeMatch) => {
+      // Try to find a gist URL in the inner <a> tag
+      const gistLinkMatch = iframeMatch.match(
+        /<a[^>]*href="(https?:\/\/gist\.github\.com[^"]*)"[^>]*>/
+      );
+      if (gistLinkMatch) {
+        return `<a href="${gistLinkMatch[1]}" class="gist-embed">${gistLinkMatch[1]}</a>`;
+      }
+
+      // Try to find any media URL in the inner <a> tag
+      const mediaLinkMatch = iframeMatch.match(
+        /<a[^>]*href="(https?:\/\/medium\.com\/media\/[^"]*)"[^>]*>/
+      );
+      if (mediaLinkMatch) {
+        // For medium media embeds, try to extract the actual embedded URL
+        try {
+          const mediaUrl = new URL(mediaLinkMatch[1]);
+          // Medium media URLs often redirect to the actual content
+          return `<a href="${mediaLinkMatch[1]}" class="media-embed">View embedded content</a>`;
+        } catch {
+          return `<a href="${mediaLinkMatch[1]}" class="media-embed">View embedded content</a>`;
         }
-      )
-      // Remove empty paragraphs Medium sometimes adds
-      .replace(/<p>\s*<\/p>/g, "")
-      // Remove Medium's image wrapper divs but keep the img
-      .replace(/<div class="aspect-ratio[^"]*"[^>]*>/g, "")
-      .replace(/<\/div>\s*(?=<\/figure>)/g, "")
-      // Normalize whitespace
-      .replace(/\s+/g, " ")
-      .replace(/> </g, ">\n<")
-      .trim()
+      }
+
+      // If no recognizable URL found, remove the empty iframe
+      return "";
+    }
   );
+
+  // Normalize whitespace but preserve it inside <pre> and <code> blocks
+  // First, extract and protect code blocks
+  const codeBlocks = [];
+  cleaned = cleaned.replace(/<(pre|code)[^>]*>[\s\S]*?<\/\1>/g, (match) => {
+    const placeholder = `__CODE_BLOCK_${codeBlocks.length}__`;
+    codeBlocks.push(match);
+    return placeholder;
+  });
+
+  // Normalize whitespace in non-code content
+  cleaned = cleaned.replace(/\s+/g, " ").replace(/> </g, ">\n<").trim();
+
+  // Restore code blocks
+  codeBlocks.forEach((block, i) => {
+    cleaned = cleaned.replace(`__CODE_BLOCK_${i}__`, block);
+  });
+
+  return cleaned;
 }
 
 module.exports = fetchArticle;
