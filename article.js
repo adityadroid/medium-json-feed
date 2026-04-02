@@ -70,28 +70,48 @@ async function resolveMediaRedirects(html) {
   for (const [originalUrl, actualUrl] of Object.entries(resolvedMap)) {
     // Escape special regex characters in URL
     const escaped = originalUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const embedUrl = actualUrl.includes("gist.github.com") &&
+      !actualUrl.endsWith(".js")
+      ? `${actualUrl}.js`
+      : actualUrl;
 
     if (actualUrl.includes("gist.github.com")) {
-      // Replace with gist-embed class
+      // Replace with a direct gist script embed when the final destination is a gist.
       resolved = resolved.replace(
         new RegExp(
           `(<a[^>]*href="${escaped}"[^>]*class=")media-embed("[^>]*>)View embedded content</a>`,
           "g"
         ),
-        `$1gist-embed$2${actualUrl}</a>`
+        `<script src="${embedUrl}" class="gist-embed" data-embed-source="${originalUrl}" async charset="utf-8"></script>`
       );
-      // Also handle cases where the link text is the URL itself
+      // Also handle cases where the link text is the URL itself.
       resolved = resolved.replace(
         new RegExp(
           `(<a[^>]*class=")media-embed("[^>]*href="${escaped}"[^>]*>)${escaped}</a>`,
           "g"
         ),
-        `$1gist-embed$2${actualUrl}</a>`
+        `<script src="${embedUrl}" class="gist-embed" data-embed-source="${originalUrl}" async charset="utf-8"></script>`
+      );
+      // Handle the common Medium RSS format with a media-embed anchor and generic text.
+      resolved = resolved.replace(
+        new RegExp(
+          `<a[^>]*href="${escaped}"[^>]*class="media-embed"[^>]*>[^<]*<\\/a>`,
+          "g"
+        ),
+        `<script src="${embedUrl}" class="gist-embed" data-embed-source="${originalUrl}" async charset="utf-8"></script>`
       );
       // Generic replacement of the URL
-      resolved = resolved.replace(new RegExp(escaped, "g"), actualUrl);
+      resolved = resolved.replace(new RegExp(escaped, "g"), embedUrl);
     } else {
-      // For non-gist media, just update the href but keep media-embed class
+      // For non-gist media, replace the anchor with a script tag so the browser can follow the redirect target.
+      resolved = resolved.replace(
+        new RegExp(
+          `<a[^>]*href="${escaped}"[^>]*class="media-embed"[^>]*>[^<]*<\\/a>`,
+          "g"
+        ),
+        `<script src="${actualUrl}" class="media-embed" data-embed-source="${originalUrl}" async charset="utf-8"></script>`
+      );
+      // Keep the raw URL updated for any remaining references.
       resolved = resolved.replace(new RegExp(escaped, "g"), actualUrl);
     }
   }
