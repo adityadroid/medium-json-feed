@@ -158,6 +158,15 @@ function cleanHtml(html) {
       .replace(/<script[^>]*>[\s\S]*?<\/script>/g, "")
       // Remove noscript tags
       .replace(/<noscript[^>]*>[\s\S]*?<\/noscript>/g, "")
+      // Fix Twitter links where Medium's noscript text leaked as link text
+      .replace(
+        /<a href="([^"]*twitter\.com\/[^"]*)">JavaScript is not available\.<\/a>/g,
+        (match, url) => {
+          const handle =
+            url.match(/twitter\.com\/([^\/?#]+)/)?.[1] || "Twitter";
+          return `<a href="${url}">@${handle}</a>`;
+        }
+      )
       // Remove empty paragraphs Medium sometimes adds
       .replace(/<p>\s*<\/p>/g, "")
       // Remove Medium's image wrapper divs but keep the img
