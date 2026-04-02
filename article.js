@@ -4,6 +4,61 @@ const https = require("https");
  * Fetches a Medium article's full content from the RSS feed.
  * The <content:encoded> tag in the RSS feed contains the complete HTML.
  */
+/**
+ * Resolve Medium media redirect URLs to their actual destinations
+ * Medium embeds use URLs like https://medium.com/media/HASH/href that redirect
+ * to the actual content (gists, codepens, etc.)
+ */
+async function resolveMediaRedirects(html) {
+  // Find all Medium media URLs in the HTML
+  const mediaUrlRegex = /https?:\/\/medium\.com\/media\/[a-f0-9]+\/href/g;
+  const mediaUrls = [...new Set(html.match(mediaUrlRegex) || [])];
+
+  if (mediaUrls.length === 0) return html;
+
+  // Resolve all redirects in parallel
+  const resolvedMap = {};
+  await Promise.all(
+    mediaUrls.map(async (url) => {
+      const resolved = await resolveRedirect(url);
+      resolvedMap[url] = resolved;
+    })
+  );
+
+  // Replace Medium media URLs with resolved URLs and update classes
+  let resolved = html;
+  for (const [originalUrl, actualUrl] of Object.entries(resolvedMap)) {
+    // Escape special regex characters in URL
+    const escaped = originalUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+    if (actualUrl.includes("gist.github.com")) {
+      // Replace with gist-embed class
+      resolved = resolved.replace(
+        new RegExp(
+          `(<a[^>]*href="${escaped}"[^>]*class=")media-embed("[^>]*>)View embedded content</a>`,
+          "g"
+        ),
+        `$1gist-embed$2${actualUrl}</a>`
+      );
+      // Also handle cases where the link text is the URL itself
+      resolved = resolved.replace(
+        new RegExp(
+          `(<a[^>]*class=")media-embed("[^>]*href="${escaped}"[^>]*>)${escaped}</a>`,
+          "g"
+        ),
+        `$1gist-embed$2${actualUrl}</a>`
+      );
+      // Generic replacement of the URL
+      resolved = resolved.replace(new RegExp(escaped, "g"), actualUrl);
+    } else {
+      // For non-gist media, just update the href but keep media-embed class
+      resolved = resolved.replace(new RegExp(escaped, "g"), actualUrl);
+    }
+  }
+
+  return resolved;
+}
+
 const fetchArticle = (slug, callback) => {
   const feedUrl = "https://medium.com/feed/@adityadroid";
 
