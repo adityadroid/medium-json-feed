@@ -147,8 +147,17 @@ function cleanHtml(html) {
 
   return (
     html
-      // Remove Medium tracking pixels
-      .replace(/<img[^>]*height="1"[^>]*width="1"[^>]*>/g, "")
+      // Remove Medium tracking pixels (1x1 images)
+      .replace(
+        /<img[^>]*(?:height="1"[^>]*width="1"|width="1"[^>]*height="1")[^>]*>/g,
+        ""
+      )
+      // Remove Medium stat tracking images
+      .replace(/<img[^>]*medium\.com\/_\/stat[^>]*>/g, "")
+      // Remove any script tags
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/g, "")
+      // Remove noscript tags
+      .replace(/<noscript[^>]*>[\s\S]*?<\/noscript>/g, "")
       // Remove empty paragraphs Medium sometimes adds
       .replace(/<p>\s*<\/p>/g, "")
       // Remove Medium's image wrapper divs but keep the img
