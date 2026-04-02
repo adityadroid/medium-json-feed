@@ -53,18 +53,90 @@ mediumJSONFeed('@my-user-name', process.stdout);
 mediumJSONFeed('@my-user-name', response);
 ```
 
-***Note**: the raw output will likely contain random chacters at the beginning of the string that break JSON format.*
+***Note**: the raw output will likely contain random characters at the beginning of the string that break JSON format.*
 
 For a full example, see `server.js` file.
 
-## Live demo (hopefully)
+## Server API
 
-See [The Web Tub's trending articles](https://medium-json-feed.herokuapp.com/the-web-tub/trending) or [Mikeal Roger's latest articles](https://medium-json-feed.herokuapp.com/@mikeal/latest).
+Run the server with:
 
-## Deploying to Heroku
+```bash
+npm start
+```
+
+The server listens on port `3000` by default (override with `PORT` env variable).
+
+### Endpoints
+
+#### `GET /@username`
+
+Fetch latest articles for a Medium user.
+
+**Example:** `http://localhost:3000/@adityadroid`
+
+**Response:**
+
+```json
+{
+  "status": 200,
+  "response": [
+    {
+      "title": "Article Title",
+      "subtitle": "First paragraph text...",
+      "link": "https://medium.com/@user/article-slug",
+      "description": "Article description",
+      "pubDate": "Mon, 01 Jan 2024 00:00:00 GMT",
+      "guid": "https://medium.com/p/abc123",
+      "author": "Author Name",
+      "categories": []
+    }
+  ]
+}
+```
+
+#### `GET /tag/tagname`
+
+Fetch articles by tag.
+
+**Example:** `http://localhost:3000/tag/javascript`
+
+#### `GET /article/:slug`
+
+Fetch full article content by slug. Returns cleaned HTML with Medium tracking removed and media redirects resolved.
+
+**Example:** `http://localhost:3000/article/my-article-slug`
+
+**Response:**
+
+```json
+{
+  "status": 200,
+  "response": {
+    "title": "Article Title",
+    "subtitle": "First paragraph text...",
+    "author": "Author Name",
+    "publishedAt": 1704067200000,
+    "coverImage": "https://miro.medium.com/...",
+    "slug": "https://medium.com/@user/my-article-slug",
+    "html": "<p>Cleaned article HTML...</p>"
+  }
+}
+```
+
+### Response Format
+
+All endpoints return gzip-compressed JSON with CORS enabled.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `status` | number | HTTP status code |
+| `error` | string | Error message (only on failure) |
+| `response` | object/array | Article data or list of articles |
+
+## Deploying
 
 1. Clone this repo.
-2. Create a new app in your [Heroku](https://heroku.com) account.
-3. Choose GitHub deploy and select your fork.
-4. Set environment variables `PORT` and `ORIGIN` (for `Access-Control-Allow-Origin` header).
-5. Hit 'deploy'.
+2. Install dependencies: `npm install`
+3. Start the server: `npm start`
+4. Set `PORT` env variable to override default port `3000`.
